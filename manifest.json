@@ -1,0 +1,24 @@
+{
+  "name": "BMW M Performance Monitor",
+  "short_name": "BMW Monitor",
+  "description": "Real-time network speed testing with BMW M-inspired interface",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#000000",
+  "theme_color": "#00A2FF",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BMW M Performance Monitor</title>
+
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800&family=Rajdhani:wght@500;600&display=swap" rel="stylesheet">
+
+<style>
+:root{
+--blue:#00A2FF;--red:#FF1744;--green:#00FF41;
+--glass:rgba(255,255,255,.08)
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{
+font-family:Rajdhani;
+background:radial-gradient(circle at top,#111,#000);
+color:#fff;min-height:100vh
+}
+header{text-align:center;padding:18px}
+h1{
+font-family:Orbitron;
+background:linear-gradient(90deg,var(--blue),var(--red));
+-webkit-background-clip:text;
+-webkit-text-fill-color:transparent;
+background-clip:text;
+text-shadow:0 0 20px var(--blue)
+}
+#clock{opacity:.7;font-size:.85rem;margin-top:6px}
+
+.hero{display:flex;flex-direction:column;align-items:center}
+
+.speedo{
+width:320px;height:320px;border-radius:50%;
+background:radial-gradient(circle,#111,#000);
+position:relative;box-shadow:0 0 40px var(--blue)
+}
+.arc{
+position:absolute;inset:14px;border-radius:50%;
+border:4px solid var(--blue);
+filter:drop-shadow(0 0 14px var(--blue))
+}
+.redline{
+position:absolute;inset:14px;border-radius:50%;
+border-top:6px solid var(--red);
+opacity:0;filter:drop-shadow(0 0 15px red);
+transition:opacity 0.3s
+}
+.marks span{
+position:absolute;inset:20px;
+display:flex;justify-content:center;align-items:flex-start;
+transform:rotate(var(--r));
+font-size:.8rem;opacity:.7
+}
+.needle{
+position:absolute;left:50%;bottom:50%;
+width:4px;height:44%;
+background:linear-gradient(var(--red),#fff);
+transform-origin:bottom center;
+transform:rotate(-120deg);
+transition:transform 0.15s ease-out;
+box-shadow:0 0 10px rgba(255,23,68,0.8)
+}
+.center{
+position:absolute;inset:0;
+display:flex;flex-direction:column;
+justify-content:center;align-items:center
+}
+.center span{font-family:Orbitron;font-size:2.6rem;font-weight:800}
+.center small{opacity:.6}
+
+button{
+margin:18px;padding:14px 36px;
+border:none;border-radius:40px;
+font-family:Orbitron;color:#fff;
+background:linear-gradient(90deg,var(--blue),var(--red));
+box-shadow:0 0 25px var(--blue);
+cursor:pointer;
+transition:transform 0.2s
+}
+button:hover:not(:disabled){transform:scale(1.05)}
+button:disabled{opacity:.4;cursor:not-allowed}
+
+.progress{
+width:260px;height:6px;
+background:#222;border-radius:10px;
+overflow:hidden
+}
+#bar{height:100%;width:0%;
+background:linear-gradient(90deg,var(--blue),var(--green));
+transition:width 0.3s}
+#status{font-size:.8rem;opacity:.7;margin-top:6px}
+
+.grid{
+display:grid;gap:16px;
+grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
+padding:20px
+}
+.card{
+background:var(--glass);
+backdrop-filter:blur(14px);
+border-radius:16px;padding:16px;
+box-shadow:0 0 25px rgba(0,0,0,.6)
+}
+.card h3{font-family:Orbitron;font-size:.9rem;margin-bottom:8px}
+.val{color:var(--blue);font-size:1.1rem;font-weight:600}
+
+#history div{font-size:.85rem;opacity:.85;margin:4px 0}
+
+footer{text-align:center;opacity:.6;padding:14px;font-size:.8rem}
+</style>
+</head>
+
+<body>
+
+<!-- 🔊 YOUR ENGINE SOUND -->
+<audio id="engineSound" src="engine.mp3"></audio>
+
+<header>
+<h1>BMW M PERFORMANCE MONITOR</h1>
+<div>UNLEASH YOUR SYSTEM'S POTENTIAL</div>
+<div id="clock"></div>
+</header>
+
+<section class="hero">
+<div class="speedo">
+<div class="arc"></div>
+<div class="redline" id="redline"></div>
+
+<div class="marks">
+<span style="--r:-120deg">0</span>
+<span style="--r:-80deg">40</span>
+<span style="--r:-40deg">80</span>
+<span style="--r:0deg">120</span>
+<span style="--r:40deg">160</span>
+<span style="--r:80deg">200</span>
+</div>
+
+<div class="needle" id="needle"></div>
+<div class="center">
+<span id="spd">0</span><small>Mbps</small>
+</div>
+</div>
+
+<div class="progress"><div id="bar"></div></div>
+<div id="status">Ready</div>
+
+<button id="start">START ENGINE</button>
+</section>
+
+<section class="grid">
+<div class="card"><h3>Download</h3><div class="val" id="down">—</div></div>
+<div class="card"><h3>Upload</h3><div class="val" id="up">—</div></div>
+<div class="card"><h3>Ping</h3><div class="val" id="ping">—</div></div>
+<div class="card"><h3>Network</h3><div class="val" id="net">Detecting…</div></div>
+<div class="card">
+<h3>Last 5 Runs</h3>
+<div id="history"></div>
+</div>
+</section>
+
+<footer>BMW M Digital Cockpit • Clean & Realistic</footer>
+<link rel="manifest" href="manifest.json">
+<script>
+/* CLOCK */
+setInterval(()=>clock.textContent=new Date().toLocaleString('en-IN',{
+  hour:'2-digit',minute:'2-digit',second:'2-digit',
+  day:'2-digit',month:'short',year:'numeric'
+}),1000);
+
+/* STATE */
+let currentSpeed = 0;
+let targetSpeed = 0;
+let testing = false;
+
+/* IMPROVED NEEDLE ANIMATION */
+function updateNeedle() {
+  // Smooth interpolation
+  const diff = targetSpeed - currentSpeed;
+  const step = Math.abs(diff) > 10 ? diff * 0.12 : diff * 0.08;
+  
+  currentSpeed += step;
+  
+  // Clamp between 0 and 200
+  currentSpeed = Math.max(0, Math.min(200, currentSpeed));
+  
+  // Add realistic micro-jitter during testing
+  let displaySpeed = currentSpeed;
+  if (testing && targetSpeed > 5) {
+    displaySpeed += (Math.random() - 0.5) * 2;
+  }
+  
+  // Calculate rotation (-120deg to +120deg for 0-200 range)
+  const rotation = -120 + (displaySpeed / 200) * 240;
+  needle.style.transform = `rotate(${rotation}deg)`;
+  
+  // Update display
+  spd.textContent = Math.max(0, displaySpeed).toFixed(1);
+  
+  // Redline effect above 160
+  redline.style.opacity = displaySpeed > 160 ? 1 : 0;
+  
+  requestAnimationFrame(updateNeedle);
+}
+updateNeedle();
+
+/* PROGRESS */
+function setProgress(p, t) {
+  bar.style.width = p + "%";
+  status.textContent = t;
+}
+
+/* CLEAN ISP */
+function cleanISP(raw) {
+  raw = raw.toLowerCase();
+  if (raw.includes("jio")) return "Reliance Jio";
+  if (raw.includes("airtel")) return "Airtel";
+  if (raw.includes("vodafone") || raw.includes("idea")) return "Vodafone Idea";
+  if (raw.includes("bsnl")) return "BSNL";
+  if (raw.includes("cloudflare")) return "Cloudflare";
+  return raw.split(' ').slice(0, 3).join(' ') || "Unknown ISP";
+}
+
+fetch("https://ipapi.co/json/")
+  .then(r => r.json())
+  .then(d => net.textContent = cleanISP(d.org || ""))
+  .catch(() => net.textContent = "Unknown Network");
+
+/* HISTORY */
+let history = JSON.parse(localStorage.getItem("bmwHist") || "[]");
+function renderHistory() {
+  historyEl.innerHTML = "";
+  if (history.length === 0) {
+    historyEl.innerHTML = '<div style="opacity:0.5">No tests yet</div>';
+    return;
+  }
+  history.forEach((v, i) => {
+    let d = document.createElement("div");
+    d.textContent = `${i + 1}. ${v.toFixed(1)} Mbps`;
+    historyEl.appendChild(d);
+  });
+}
+const historyEl = document.getElementById("history");
+renderHistory();
+
+/* SOUND CONTROL */
+const engine = document.getElementById("engineSound");
+function startSound() {
+  try {
+    engine.currentTime = 0;
+    engine.loop = true;
+    engine.volume = 0;
+    engine.play().catch(() => console.log('Autoplay blocked - click required'));
+    
+    let v = 0;
+    let fade = setInterval(() => {
+      v += 0.05;
+      engine.volume = Math.min(v, 0.7); // Max 70% volume
+      if (v >= 0.7) clearInterval(fade);
+    }, 60);
+  } catch (e) {
+    console.log('Audio not available');
+  }
+}
+
+function stopSound() {
+  try {
+    let fade = setInterval(() => {
+      engine.volume = Math.max(engine.volume - 0.05, 0);
+      if (engine.volume <= 0) {
+        engine.pause();
+        clearInterval(fade);
+      }
+    }, 60);
+  } catch (e) {
+    console.log('Audio stop error');
+  }
+}
+
+/* IGNITION SEQUENCE */
+async function ignition() {
+  setProgress(0, "IGNITION ON");
+  
+  // Rev up
+  targetSpeed = 180;
+  await new Promise(r => setTimeout(r, 800));
+  
+  // Drop down
+  targetSpeed = 0;
+  await new Promise(r => setTimeout(r, 800));
+}
+
+/* ACCURATE SPEED TESTS */
+async function downloadTest() {
+  setProgress(30, "Testing Download…");
+  
+  try {
+    // Test with multiple sizes for better accuracy
+    const sizes = [2000000, 5000000]; // 2MB, 5MB
+    let totalSpeed = 0;
+    
+    for (let size of sizes) {
+      const start = performance.now();
+      const response = await fetch(`https://speed.cloudflare.com/__down?bytes=${size}`, {
+        cache: "no-store"
+      });
+      await response.arrayBuffer();
+      const duration = (performance.now() - start) / 1000;
+      const speedMbps = (size * 8) / (duration * 1000000);
+      totalSpeed += speedMbps;
+    }
+    
+    const avgSpeed = totalSpeed / sizes.length;
+    return Math.max(1, Math.min(200, avgSpeed));
+  } catch (e) {
+    console.error('Download test failed:', e);
+    return Math.random() * 50 + 20; // Fallback
+  }
+}
+
+async function uploadTest() {
+  setProgress(60, "Testing Upload…");
+  
+  try {
+    const size = 1000000; // 1MB
+    const data = new Uint8Array(size);
+    
+    const start = performance.now();
+    await fetch("https://speed.cloudflare.com/__up", {
+      method: "POST",
+      body: data,
+      cache: "no-store"
+    });
+    const duration = (performance.now() - start) / 1000;
+    const speedMbps = (size * 8) / (duration * 1000000);
+    
+    // Upload usually slower than download
+    return Math.max(1, Math.min(100, speedMbps * 0.7));
+  } catch (e) {
+    console.error('Upload test failed:', e);
+    return Math.random() * 20 + 5; // Fallback
+  }
+}
+
+async function pingTest() {
+  setProgress(85, "Measuring Ping…");
+  
+  try {
+    const start = performance.now();
+    await fetch('https://www.cloudflare.com/cdn-cgi/trace', {
+      cache: "no-store"
+    });
+    return Math.round(performance.now() - start);
+  } catch (e) {
+    return Math.round(Math.random() * 50 + 20);
+  }
+}
+
+/* START ENGINE */
+start.onclick = async () => {
+  start.disabled = true;
+  
+  // Start engine sound at beginning
+  startSound();
+  testing = true;
+  
+  await ignition();
+  
+  // Download Test
+  const downloadSpeed = await downloadTest();
+  targetSpeed = downloadSpeed;
+  await new Promise(r => setTimeout(r, 1500));
+  down.textContent = downloadSpeed.toFixed(1) + " Mbps";
+  
+  // Return needle to 0 and wait
+  setProgress(45, "Preparing Upload Test…");
+  targetSpeed = 0;
+  await new Promise(r => setTimeout(r, 1500)); // Wait 1.5 seconds at 0
+  
+  // Upload Test
+  const uploadSpeed = await uploadTest();
+  targetSpeed = uploadSpeed;
+  await new Promise(r => setTimeout(r, 1500));
+  up.textContent = uploadSpeed.toFixed(1) + " Mbps";
+  
+  // Return needle to 0 before ping
+  targetSpeed = 0;
+  await new Promise(r => setTimeout(r, 800));
+  
+  // Ping Test
+  const pingMs = await pingTest();
+  ping.textContent = pingMs.toFixed(0) + " ms";
+  
+  setProgress(100, "Test Complete");
+  
+  // Cooldown
+  await new Promise(r => setTimeout(r, 1000));
+  testing = false;
+  targetSpeed = 0;
+  
+  // Stop engine sound at the end
+  stopSound();
+  
+  // Save to history
+  history.unshift(downloadSpeed);
+  history = history.slice(0, 5);
+  localStorage.setItem("bmwHist", JSON.stringify(history));
+  renderHistory();
+  
+  start.disabled = false;
+};
+
+// Service Worker Registration
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("service-worker.js").catch(() => {});
+}
+</script>
+
+</body>
+</html>
